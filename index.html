@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AMU Mamoon Record</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#f57c00"/>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("service-worker.js");
+      });
+    }
+  </script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #fafafa; }
+    h1 { text-align: center; color: #f57c00; }
+    form, table { margin: 20px auto; max-width: 600px; }
+    form input, form select, form button { padding: 8px; margin: 5px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    th { background: #f57c00; color: white; }
+    button { cursor: pointer; border: none; border-radius: 5px; }
+    .delete { background: #e53935; color: white; }
+    .edit { background: #43a047; color: white; }
+    .backup { background: #039be5; color: white; padding: 10px; }
+  </style>
+</head>
+<body>
+  <h1>AMU Mamoon Record</h1>
+
+  <form id="entryForm">
+    <input type="text" id="name" placeholder="Name" required />
+    <input type="number" id="amount" placeholder="Amount" required />
+    <select id="type">
+      <option value="credit">Credit</option>
+      <option value="debit">Debit</option>
+    </select>
+    <input type="date" id="date" required />
+    <button type="submit">Save</button>
+  </form>
+
+  <div style="text-align:center;">
+    <button id="exportBtn" class="backup">Export CSV</button>
+    <button id="importBtn" class="backup">Import CSV</button>
+    <input type="file" id="importFile" accept=".csv" style="display:none"/>
+    <button id="quickBackupBtn" class="backup">Quick Backup</button>
+  </div>
+
+  <table id="ledgerTable">
+    <thead>
+      <tr>
+        <th>Name</th><th>Amount</th><th>Type</th><th>Date</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    let entries = JSON.parse(localStorage.getItem("ledgerEntries") || "[]");
+    let editIndex = -1;
+
+    const form = document.getElementById("entryForm");
+    const tableBody = document.querySelector("#ledgerTable tbody");
+    const importFile = document.getElementById("importFile");
+
+    function saveEntries() {
+      localStorage.setItem("ledgerEntries", JSON.stringify(entries));
+      renderTable();
+    }
+
+    function renderTable() {
+      tableBody.innerHTML = "";
+      entries.forEach((e, i) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${e.name}</td>
+          <td>${e.amount}</td>
+          <td>${e.type}</td>
+          <td>${e.date}</td>
+          <td>
+            <button class="edit" onclick="editEntry(${i})">Edit</button>
+            <button class="delete" onclick="deleteEntry(${i})">Delete</button>
+          </td>
+        `;
+        tableBody.appendChild(row);
+      });
+    }
+
+    form.onsubmit = (ev) => {
+      ev.preventDefault();
+      const entry = {
+        name: document.getElementById("name").value,
+        amount: parseFloat(document.getElementById("amount").value),
+        type: document.getElementById("type").value,
+        date: document.getElementById("date").value
+      };
+      if (editIndex > -1) {
+        entries[editIndex] = entry;
+        editIndex = -1;
+      } else {
+        entries.push(entry);
+      }
+      saveEntries();
+      form.reset();
+    };
+
+    window.editEntry = (i) => {
+      const e = entries[i];
+      document.getElementById("name").value = e.name;
+      document.getElementById("amount").value = e.amount;
+      document.getElementById("type").value = e.type;
+      document.getElementById("date").value = e.date;
+      editIndex = i;
+    };
+
+    window.deleteEntry = (i) => {
+      if (confirm("Delete this entry?")) {
+        entries.splice(i, 1);
+        saveEntries();
+      }
+    };
+
+    document.getElementById("exportBtn").onclick = () => {
+      const csv = entries.map(e => `${e.name},${e.amount},${e.type},${e.date}`).join("\n");
+      downloadCSV(csv, "ledger-export.csv");
+    };
+
+    function downloadCSV(data, filename) {
+      const blob = new Blob([data], {type:"text/csv"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+
+    document.getElementById("importBtn").onclick = () => importFile.click();
+    importFile.onchange = (ev) => {
+      const file = ev.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const lines = e.target.result.split("\n").map(l => l.split(","));
+        entries = lines.filter(l => l.length===4).map(l => ({
+          name: l[0], amount: parseFloat(l[1]), type: l[2], date: l[3]
+        }));
+        saveEntries();
+      };
+      reader.readAsText(file);
+    };
+
+    document.getElementById("quickBackupBtn").onclick = () => {
+      const date = new Date().toISOString().split("T")[0];
+      const csv = entries.map(e => `${e.name},${e.amount},${e.type},${e.date}`).join("\n");
+      downloadCSV(csv, `ledger-backup-${date}.csv`);
+    };
+
+    renderTable();
+  </script>
+</body>
+</html>
