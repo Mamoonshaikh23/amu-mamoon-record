@@ -2,160 +2,193 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AMU Mamoon Record</title>
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#f57c00"/>
-  <script>
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("service-worker.js");
-      });
-    }
-  </script>
+
+  <!-- Link to PWA manifest -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#f57c00" />
+
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #fafafa; }
-    h1 { text-align: center; color: #f57c00; }
-    form, table { margin: 20px auto; max-width: 600px; }
-    form input, form select, form button { padding: 8px; margin: 5px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f9f9f9;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    .form-section, .summary, .search-section {
+      background: #fff;
+      padding: 15px;
+      margin: 10px auto;
+      border-radius: 8px;
+      max-width: 600px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    label { display: block; margin: 5px 0; }
+    input, select, button {
+      margin: 5px 0;
+      padding: 8px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+      background: #fff;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ddd;
+      text-align: center;
+    }
     th { background: #f57c00; color: white; }
-    button { cursor: pointer; border: none; border-radius: 5px; }
-    .delete { background: #e53935; color: white; }
-    .edit { background: #43a047; color: white; }
-    .backup { background: #039be5; color: white; padding: 10px; }
+    .btn-danger { background: red; color: white; border: none; padding: 5px 10px; cursor: pointer; }
+    .btn-edit { background: #007bff; color: white; border: none; padding: 5px 10px; cursor: pointer; }
+    .backup-btn { background: green; color: white; border: none; padding: 10px; margin-top: 10px; cursor: pointer; width: 100%; }
   </style>
 </head>
 <body>
   <h1>AMU Mamoon Record</h1>
 
-  <form id="entryForm">
-    <input type="text" id="name" placeholder="Name" required />
-    <input type="number" id="amount" placeholder="Amount" required />
-    <select id="type">
-      <option value="credit">Credit</option>
-      <option value="debit">Debit</option>
-    </select>
-    <input type="date" id="date" required />
-    <button type="submit">Save</button>
-  </form>
-
-  <div style="text-align:center;">
-    <button id="exportBtn" class="backup">Export CSV</button>
-    <button id="importBtn" class="backup">Import CSV</button>
-    <input type="file" id="importFile" accept=".csv" style="display:none"/>
-    <button id="quickBackupBtn" class="backup">Quick Backup</button>
+  <!-- Form Section -->
+  <div class="form-section">
+    <label>Name: <input type="text" id="name"></label>
+    <label>Amount: <input type="number" id="amount"></label>
+    <label>Type:
+      <select id="type">
+        <option value="credit">Credit</option>
+        <option value="debit">Debit</option>
+      </select>
+    </label>
+    <label>Date: <input type="date" id="date"></label>
+    <button onclick="addEntry()">Add Entry</button>
   </div>
 
-  <table id="ledgerTable">
+  <!-- Search & Filter Section -->
+  <div class="search-section">
+    <label>Search by Name: <input type="text" id="searchInput" onkeyup="renderEntries()"></label>
+    <label>Date From: <input type="date" id="fromDate" onchange="renderEntries()"></label>
+    <label>Date To: <input type="date" id="toDate" onchange="renderEntries()"></label>
+  </div>
+
+  <!-- Summary Section -->
+  <div class="summary">
+    <p><strong>Total Credit:</strong> <span id="totalCredit">0</span></p>
+    <p><strong>Total Debit:</strong> <span id="totalDebit">0</span></p>
+    <p><strong>Balance:</strong> <span id="balance">0</span></p>
+    <button class="backup-btn" onclick="backupData()">Quick Backup</button>
+  </div>
+
+  <!-- Entries Table -->
+  <table id="entriesTable">
     <thead>
       <tr>
-        <th>Name</th><th>Amount</th><th>Type</th><th>Date</th><th>Actions</th>
+        <th>Name</th>
+        <th>Amount</th>
+        <th>Type</th>
+        <th>Date</th>
+        <th>Actions</th>
       </tr>
     </thead>
     <tbody></tbody>
   </table>
 
   <script>
-    let entries = JSON.parse(localStorage.getItem("ledgerEntries") || "[]");
-    let editIndex = -1;
+    let entries = JSON.parse(localStorage.getItem("ledgerEntries")) || [];
 
-    const form = document.getElementById("entryForm");
-    const tableBody = document.querySelector("#ledgerTable tbody");
-    const importFile = document.getElementById("importFile");
+    function addEntry() {
+      const name = document.getElementById("name").value;
+      const amount = parseFloat(document.getElementById("amount").value);
+      const type = document.getElementById("type").value;
+      const date = document.getElementById("date").value;
 
-    function saveEntries() {
+      if (!name || !amount || !date) return alert("Please fill all fields");
+
+      entries.push({ name, amount, type, date });
       localStorage.setItem("ledgerEntries", JSON.stringify(entries));
-      renderTable();
+
+      document.getElementById("name").value = "";
+      document.getElementById("amount").value = "";
+      document.getElementById("date").value = "";
+
+      renderEntries();
     }
 
-    function renderTable() {
-      tableBody.innerHTML = "";
-      entries.forEach((e, i) => {
+    function deleteEntry(index) {
+      if (confirm("Delete this entry?")) {
+        entries.splice(index, 1);
+        localStorage.setItem("ledgerEntries", JSON.stringify(entries));
+        renderEntries();
+      }
+    }
+
+    function editEntry(index) {
+      const entry = entries[index];
+      document.getElementById("name").value = entry.name;
+      document.getElementById("amount").value = entry.amount;
+      document.getElementById("type").value = entry.type;
+      document.getElementById("date").value = entry.date;
+      deleteEntry(index);
+    }
+
+    function renderEntries() {
+      const tbody = document.querySelector("#entriesTable tbody");
+      tbody.innerHTML = "";
+
+      const search = document.getElementById("searchInput").value.toLowerCase();
+      const fromDate = document.getElementById("fromDate").value;
+      const toDate = document.getElementById("toDate").value;
+
+      let totalCredit = 0, totalDebit = 0;
+
+      entries.forEach((entry, index) => {
+        if (search && !entry.name.toLowerCase().includes(search)) return;
+        if (fromDate && entry.date < fromDate) return;
+        if (toDate && entry.date > toDate) return;
+
         const row = document.createElement("tr");
         row.innerHTML = `
-          <td>${e.name}</td>
-          <td>${e.amount}</td>
-          <td>${e.type}</td>
-          <td>${e.date}</td>
+          <td>${entry.name}</td>
+          <td>${entry.amount}</td>
+          <td>${entry.type}</td>
+          <td>${entry.date}</td>
           <td>
-            <button class="edit" onclick="editEntry(${i})">Edit</button>
-            <button class="delete" onclick="deleteEntry(${i})">Delete</button>
+            <button class="btn-edit" onclick="editEntry(${index})">Edit</button>
+            <button class="btn-danger" onclick="deleteEntry(${index})">Delete</button>
           </td>
         `;
-        tableBody.appendChild(row);
+        tbody.appendChild(row);
+
+        if (entry.type === "credit") totalCredit += entry.amount;
+        else totalDebit += entry.amount;
       });
+
+      document.getElementById("totalCredit").innerText = totalCredit;
+      document.getElementById("totalDebit").innerText = totalDebit;
+      document.getElementById("balance").innerText = totalCredit - totalDebit;
     }
 
-    form.onsubmit = (ev) => {
-      ev.preventDefault();
-      const entry = {
-        name: document.getElementById("name").value,
-        amount: parseFloat(document.getElementById("amount").value),
-        type: document.getElementById("type").value,
-        date: document.getElementById("date").value
-      };
-      if (editIndex > -1) {
-        entries[editIndex] = entry;
-        editIndex = -1;
-      } else {
-        entries.push(entry);
-      }
-      saveEntries();
-      form.reset();
-    };
-
-    window.editEntry = (i) => {
-      const e = entries[i];
-      document.getElementById("name").value = e.name;
-      document.getElementById("amount").value = e.amount;
-      document.getElementById("type").value = e.type;
-      document.getElementById("date").value = e.date;
-      editIndex = i;
-    };
-
-    window.deleteEntry = (i) => {
-      if (confirm("Delete this entry?")) {
-        entries.splice(i, 1);
-        saveEntries();
-      }
-    };
-
-    document.getElementById("exportBtn").onclick = () => {
-      const csv = entries.map(e => `${e.name},${e.amount},${e.type},${e.date}`).join("\n");
-      downloadCSV(csv, "ledger-export.csv");
-    };
-
-    function downloadCSV(data, filename) {
-      const blob = new Blob([data], {type:"text/csv"});
+    function backupData() {
+      const blob = new Blob([JSON.stringify(entries, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = filename;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      a.href = url;
+      a.download = "ledger-backup.json";
+      a.click();
+      URL.revokeObjectURL(url);
     }
 
-    document.getElementById("importBtn").onclick = () => importFile.click();
-    importFile.onchange = (ev) => {
-      const file = ev.target.files[0];
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const lines = e.target.result.split("\n").map(l => l.split(","));
-        entries = lines.filter(l => l.length===4).map(l => ({
-          name: l[0], amount: parseFloat(l[1]), type: l[2], date: l[3]
-        }));
-        saveEntries();
-      };
-      reader.readAsText(file);
-    };
+    // Render on load
+    renderEntries();
 
-    document.getElementById("quickBackupBtn").onclick = () => {
-      const date = new Date().toISOString().split("T")[0];
-      const csv = entries.map(e => `${e.name},${e.amount},${e.type},${e.date}`).join("\n");
-      downloadCSV(csv, `ledger-backup-${date}.csv`);
-    };
-
-    renderTable();
+    // PWA Service Worker
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("service-worker.js").catch(err => console.error("SW reg failed", err));
+    }
   </script>
 </body>
 </html>
