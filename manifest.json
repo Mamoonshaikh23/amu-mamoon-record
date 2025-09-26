@@ -1,15 +1,194 @@
-{
-  "name": "AMU Mamoon Record",
-  "short_name": "Mamoon Record",
-  "start_url": "./",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#f57c00",
-  "icons": [
-    {
-      "src": "ledger-icon.png",
-      "sizes": "512x512",
-      "type": "image/png"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AMU Mamoon Record</title>
+
+  <!-- Link to PWA manifest -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#f57c00" />
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f9f9f9;
     }
-  ]
-}
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    .form-section, .summary, .search-section {
+      background: #fff;
+      padding: 15px;
+      margin: 10px auto;
+      border-radius: 8px;
+      max-width: 600px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    label { display: block; margin: 5px 0; }
+    input, select, button {
+      margin: 5px 0;
+      padding: 8px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+      background: #fff;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ddd;
+      text-align: center;
+    }
+    th { background: #f57c00; color: white; }
+    .btn-danger { background: red; color: white; border: none; padding: 5px 10px; cursor: pointer; }
+    .btn-edit { background: #007bff; color: white; border: none; padding: 5px 10px; cursor: pointer; }
+    .backup-btn { background: green; color: white; border: none; padding: 10px; margin-top: 10px; cursor: pointer; width: 100%; }
+  </style>
+</head>
+<body>
+  <h1>AMU Mamoon Record</h1>
+
+  <!-- Form Section -->
+  <div class="form-section">
+    <label>Name: <input type="text" id="name"></label>
+    <label>Amount: <input type="number" id="amount"></label>
+    <label>Type:
+      <select id="type">
+        <option value="credit">Credit</option>
+        <option value="debit">Debit</option>
+      </select>
+    </label>
+    <label>Date: <input type="date" id="date"></label>
+    <button onclick="addEntry()">Add Entry</button>
+  </div>
+
+  <!-- Search & Filter Section -->
+  <div class="search-section">
+    <label>Search by Name: <input type="text" id="searchInput" onkeyup="renderEntries()"></label>
+    <label>Date From: <input type="date" id="fromDate" onchange="renderEntries()"></label>
+    <label>Date To: <input type="date" id="toDate" onchange="renderEntries()"></label>
+  </div>
+
+  <!-- Summary Section -->
+  <div class="summary">
+    <p><strong>Total Credit:</strong> <span id="totalCredit">0</span></p>
+    <p><strong>Total Debit:</strong> <span id="totalDebit">0</span></p>
+    <p><strong>Balance:</strong> <span id="balance">0</span></p>
+    <button class="backup-btn" onclick="backupData()">Quick Backup</button>
+  </div>
+
+  <!-- Entries Table -->
+  <table id="entriesTable">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Amount</th>
+        <th>Type</th>
+        <th>Date</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    let entries = JSON.parse(localStorage.getItem("ledgerEntries")) || [];
+
+    function addEntry() {
+      const name = document.getElementById("name").value;
+      const amount = parseFloat(document.getElementById("amount").value);
+      const type = document.getElementById("type").value;
+      const date = document.getElementById("date").value;
+
+      if (!name || !amount || !date) return alert("Please fill all fields");
+
+      entries.push({ name, amount, type, date });
+      localStorage.setItem("ledgerEntries", JSON.stringify(entries));
+
+      document.getElementById("name").value = "";
+      document.getElementById("amount").value = "";
+      document.getElementById("date").value = "";
+
+      renderEntries();
+    }
+
+    function deleteEntry(index) {
+      if (confirm("Delete this entry?")) {
+        entries.splice(index, 1);
+        localStorage.setItem("ledgerEntries", JSON.stringify(entries));
+        renderEntries();
+      }
+    }
+
+    function editEntry(index) {
+      const entry = entries[index];
+      document.getElementById("name").value = entry.name;
+      document.getElementById("amount").value = entry.amount;
+      document.getElementById("type").value = entry.type;
+      document.getElementById("date").value = entry.date;
+      deleteEntry(index);
+    }
+
+    function renderEntries() {
+      const tbody = document.querySelector("#entriesTable tbody");
+      tbody.innerHTML = "";
+
+      const search = document.getElementById("searchInput").value.toLowerCase();
+      const fromDate = document.getElementById("fromDate").value;
+      const toDate = document.getElementById("toDate").value;
+
+      let totalCredit = 0, totalDebit = 0;
+
+      entries.forEach((entry, index) => {
+        if (search && !entry.name.toLowerCase().includes(search)) return;
+        if (fromDate && entry.date < fromDate) return;
+        if (toDate && entry.date > toDate) return;
+
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${entry.name}</td>
+          <td>${entry.amount}</td>
+          <td>${entry.type}</td>
+          <td>${entry.date}</td>
+          <td>
+            <button class="btn-edit" onclick="editEntry(${index})">Edit</button>
+            <button class="btn-danger" onclick="deleteEntry(${index})">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+
+        if (entry.type === "credit") totalCredit += entry.amount;
+        else totalDebit += entry.amount;
+      });
+
+      document.getElementById("totalCredit").innerText = totalCredit;
+      document.getElementById("totalDebit").innerText = totalDebit;
+      document.getElementById("balance").innerText = totalCredit - totalDebit;
+    }
+
+    function backupData() {
+      const blob = new Blob([JSON.stringify(entries, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "ledger-backup.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Render on load
+    renderEntries();
+
+    // PWA Service Worker
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("service-worker.js").catch(err => console.error("SW reg failed", err));
+    }
+  </script>
+</body>
+</html>
